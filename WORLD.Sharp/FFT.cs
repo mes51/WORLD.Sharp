@@ -20,6 +20,12 @@ namespace WORLD.Sharp
 
     class FFTPlan
     {
+        static Dictionary<int, Tuple<int[], double[]>> DFTCache = new Dictionary<int, Tuple<int[], double[]>>();
+
+        static Dictionary<int, Tuple<int[], double[]>> C2RCache = new Dictionary<int, Tuple<int[], double[]>>();
+
+        static Dictionary<int, Tuple<int[], double[]>> R2CCache = new Dictionary<int, Tuple<int[], double[]>>();
+
         public int N { get; }
         public FFTSign Sign { get; }
         public FFTFlag Flag { get; }
@@ -47,33 +53,66 @@ namespace WORLD.Sharp
 
         public static FFTPlan CreatePlanForDft(int n, Complex[] cin, Complex[] cout, FFTSign sign, FFTFlag flag)
         {
-            var ip = new int[n];
-            var w = new double[n * 5 / 4];
-            MakeWT(n >> 1, ip, w);
+            if (!DFTCache.ContainsKey(n))
+            {
+                lock(DFTCache)
+                {
+                    if (!DFTCache.ContainsKey(n))
+                    {
+                        var tip = new int[n];
+                        var tw = new double[n * 5 / 4];
+                        MakeWT(n >> 1, tip, tw);
+                        DFTCache.Add(n, Tuple.Create(tip, tw));
+                    }
+                }
+            }
+            var (ip, w) = DFTCache[n];
 
             return new FFTPlan(n, sign, flag, cin, null, cout, null, new double[n * 2], ip, w);
         }
 
         public static FFTPlan CreatePlanForDftC2R(int n, Complex[] cin, double[] @out, FFTFlag flag)
         {
-            var ip = new int[n];
-            var w = new double[n * 5 / 4];
-            var c = new double[w.Length - (n >> 2)];
-            MakeWT(n >> 2, ip, w);
-            MakeCT(n >> 2, ip, c);
-            c.BlockCopy(0, w, n >> 2, c.Length);
+            if (!C2RCache.ContainsKey(n))
+            {
+                lock (C2RCache)
+                {
+                    if (!C2RCache.ContainsKey(n))
+                    {
+                        var tip = new int[n];
+                        var tw = new double[n * 5 / 4];
+                        var c = new double[tw.Length - (n >> 2)];
+                        MakeWT(n >> 2, tip, tw);
+                        MakeCT(n >> 2, tip, c);
+                        c.BlockCopy(0, tw, n >> 2, c.Length);
+                        C2RCache.Add(n, Tuple.Create(tip, tw));
+                    }
+                }
+            }
+            var (ip, w) = C2RCache[n];
 
             return new FFTPlan(n, FFTSign.Backward, flag, cin, null, null, @out, new double[n], ip, w);
         }
 
         public static FFTPlan CreatePlanForDftR2C(int n, double[] @in, Complex[] cout, FFTFlag flag)
         {
-            var ip = new int[n];
-            var w = new double[n * 5 / 4];
-            var c = new double[w.Length - (n >> 2)];
-            MakeWT(n >> 2, ip, w);
-            MakeCT(n >> 2, ip, c);
-            c.BlockCopy(0, w, n >> 2, c.Length);
+            if (!R2CCache.ContainsKey(n))
+            {
+                lock (R2CCache)
+                {
+                    if (!R2CCache.ContainsKey(n))
+                    {
+                        var tip = new int[n];
+                        var tw = new double[n * 5 / 4];
+                        var c = new double[tw.Length - (n >> 2)];
+                        MakeWT(n >> 2, tip, tw);
+                        MakeCT(n >> 2, tip, c);
+                        c.BlockCopy(0, tw, n >> 2, c.Length);
+                        R2CCache.Add(n, Tuple.Create(tip, tw));
+                    }
+                }
+            }
+            var (ip, w) = R2CCache[n];
 
             return new FFTPlan(n, FFTSign.Forward, flag, null, @in, cout, null, new double[n], ip, w);
         }
