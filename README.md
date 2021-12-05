@@ -40,4 +40,4 @@ synthesis.Synthesize(f0, f0.Length, spectrogram, aperiodicity, fftSize, framePer
 
 ## Caveats
 
-* DIO, Stonemask and tools are not ported
+* tools are not ported

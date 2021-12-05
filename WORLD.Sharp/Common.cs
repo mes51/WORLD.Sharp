@@ -9,6 +9,11 @@ namespace WORLD.Sharp
 {
     static class Common
     {
+        public static int GetSuitableFFTSize(int sample)
+        {
+            return (int)(Math.Pow(2.0, (int)(MathUtil.Log2(sample) + 1.0)));
+        }
+
         public static void NuttallWindow(int yLength, double[] y)
         {
             for (int i = 0; i < yLength; i++)

@@ -31,7 +31,7 @@ namespace WORLD.Sharp
         public FFTFlag Flag { get; }
         public Complex[] CIn { get; }
         public double[] In { get; }
-        public Complex[] COut { get; }
+        public Complex[] COut { get; set; }
         public double[] Out { get; }
         public double[] Input { get; }
         public int[] IP { get; }
