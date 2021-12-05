@@ -240,11 +240,17 @@ namespace WORLD.Sharp
 
         void GetCentroid(double[] x, double currentF0, int fftSize, double currentPosition, MVN rand, ForwardRealFFT forwardRealFFT, double[] centroid)
         {
-            Array.Clear(forwardRealFFT.Waveform, 0, fftSize);
+            forwardRealFFT.Waveform.AsSpan().Clear();
             GetWindowedWaveform(x, currentF0, currentPosition, WindowType.Blackman, 4.0, rand, forwardRealFFT.Waveform);
 
             var windowRange = MatlabFunctions.MatlabRound(2.0 * Fs / currentF0) * 2;
-            var power = Math.Sqrt(forwardRealFFT.Waveform.Take(windowRange).Sum((w) => w * w));
+            var waveform = forwardRealFFT.Waveform;
+            var power = 0.0;
+            for (var i = 0; i < windowRange; i++)
+            {
+                power += waveform[i] * waveform[i];
+            }
+            power = Math.Sqrt(power);
             for (var i = 0; i <= windowRange; i++)
             {
                 forwardRealFFT.Waveform[i] /= power;
@@ -252,7 +258,7 @@ namespace WORLD.Sharp
 
             FFT.Execute(forwardRealFFT.ForwardFFT);
             var tmpSpectrum = new Complex[fftSize / 2 + 1];
-            Array.Copy(forwardRealFFT.Spectrum, tmpSpectrum, tmpSpectrum.Length);
+            forwardRealFFT.Spectrum.AsSpan(0, tmpSpectrum.Length).CopyTo(tmpSpectrum);
 
             for (var i = 0; i < fftSize; i++)
             {
@@ -285,8 +291,16 @@ namespace WORLD.Sharp
                 waveform[i] = x[safeIndex[i]] * window[i] + rand.GenerateMVN() * SafeGuardMinimum;
             }
 
-            var tmpWeight1 = waveform.Sum();
-            var tmpWeight2 = window.Sum();
+            var tmpWeight1 = 0.0;
+            var tmpWeight2 = 0.0;
+            for (var i = 0; i < waveform.Length; i++)
+            {
+                tmpWeight1 += waveform[i];
+            }
+            for (var i = 0; i < window.Length; i++)
+            {
+                tmpWeight2 += window[i];
+            }
             var weightingCoefficient = tmpWeight1 / tmpWeight2;
             for (int i = 0, limit = halfWindowLength * 2; i <= limit; i++)
             {
@@ -349,8 +363,8 @@ namespace WORLD.Sharp
                 Parallel.For(
                     0,
                     f0.Length,
-                    () => ForwardRealFFT.Create(fftSize),
-                    (i, loop, forwardRealFFT) =>
+                    () => new { ForwardRealFFT = ForwardRealFFT.Create(fftSize), PowerSpectrum = new double[fftSize] },
+                    (i, loop, t) =>
                     {
                         if (f0[i] == 0.0)
                         {
@@ -358,10 +372,11 @@ namespace WORLD.Sharp
                         }
                         else
                         {
-                            aperiodicity0[i] = D4CLoveTrainSub(x, Math.Max(f0[i], lowestF0), temporalPositions[i], f0Length, fftSize, boundary0, boundary1, boundary2, rand, forwardRealFFT);
+                            aperiodicity0[i] = D4CLoveTrainSub(x, Math.Max(f0[i], lowestF0), temporalPositions[i], f0Length, fftSize, boundary0, boundary1, boundary2, rand, t.ForwardRealFFT, t.PowerSpectrum);
+                            t.PowerSpectrum.AsSpan().Clear();
                         }
 
-                        return forwardRealFFT;
+                        return t;
                     },
                     _ => { }
                 );
@@ -369,6 +384,7 @@ namespace WORLD.Sharp
             else
             {
                 var forwardRealFFT = ForwardRealFFT.Create(fftSize);
+                var powerSpectrum = new double[fftSize];
                 for (var i = 0; i < f0Length; i++)
                 {
                     if (f0[i] == 0.0)
@@ -377,19 +393,18 @@ namespace WORLD.Sharp
                         continue;
                     }
 
-                    aperiodicity0[i] = D4CLoveTrainSub(x, Math.Max(f0[i], lowestF0), temporalPositions[i], f0Length, fftSize, boundary0, boundary1, boundary2, rand, forwardRealFFT);
+                    aperiodicity0[i] = D4CLoveTrainSub(x, Math.Max(f0[i], lowestF0), temporalPositions[i], f0Length, fftSize, boundary0, boundary1, boundary2, rand, forwardRealFFT, powerSpectrum);
+                    powerSpectrum.AsSpan().Clear();
                 }
             }
         }
 
-        double D4CLoveTrainSub(double[] x, double currentF0, double currentPosition, int f0Length, int fftSize, int boundary0, int boundary1, int boundary2, MVN rand, ForwardRealFFT forwardRealFFT)
+        double D4CLoveTrainSub(double[] x, double currentF0, double currentPosition, int f0Length, int fftSize, int boundary0, int boundary1, int boundary2, MVN rand, ForwardRealFFT forwardRealFFT, double[] powerSpectrum)
         {
-            var powerSpectrum = new double[fftSize];
-
             var windowLength = MatlabFunctions.MatlabRound(1.5 * Fs / currentF0) * 2 + 1;
             GetWindowedWaveform(x, currentF0, currentPosition, WindowType.Blackman, 3.0, rand, forwardRealFFT.Waveform);
 
-            Array.Clear(forwardRealFFT.Waveform, windowLength, fftSize - windowLength);
+            forwardRealFFT.Waveform.AsSpan(windowLength, fftSize - windowLength).Clear();
             FFT.Execute(forwardRealFFT.ForwardFFT);
 
             var spectrum = forwardRealFFT.Spectrum;

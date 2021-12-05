@@ -352,19 +352,27 @@ namespace WORLD.Sharp
                     Rdft(plan.N, input, plan.IP, w);
                 }
 
-                plan.COut[0] = new Complex(plan.Input[0], 0.0);
-                for (int i = 1, ii = 2, limit = plan.N / 2; i < limit; i++, ii += 2)
+                fixed (Complex* coutPtr = &plan.COut[0])
                 {
-                    plan.COut[i] = new Complex(plan.Input[ii], -plan.Input[ii + 1]);
+                    var cout = new Span<double>(coutPtr, plan.N + 2);
+                    cout[0] = plan.Input[0];
+                    cout[1] = 0.0;
+                    plan.Input.AsSpan(2).CopyTo(cout.Slice(2, plan.N - 2));
+
+                    for (var i = 1; i < cout.Length; i += 2)
+                    {
+                        cout[i] = -cout[i];
+                    }
+
+                    cout[plan.N] = plan.Input[1];
+                    cout[plan.N + 1] = 0.0;
                 }
-                plan.COut[plan.N / 2] = new Complex(plan.Input[1], 0.0);
             }
             else
             {
-                for (int i = 0, ii = 0; i < plan.N; i++, ii += 2)
+                fixed (Complex* cinPtr = &plan.CIn[0])
                 {
-                    plan.Input[ii] = plan.CIn[i].Real;
-                    plan.Input[ii + 1] = plan.CIn[i].Imaginary;
+                    new Span<double>(cinPtr, plan.N * 2).CopyTo(plan.Input);
                 }
 
                 fixed (double* w = &plan.W[0])
@@ -373,9 +381,15 @@ namespace WORLD.Sharp
                     Cdft(plan.N * 2, input, plan.IP, w);
                 }
 
-                for (int i = 0, ii = 0; i < plan.N; i++, ii += 2)
+                fixed (Complex* coutPtr = &plan.COut[0])
                 {
-                    plan.COut[i] = new Complex(plan.Input[ii], -plan.Input[ii + 1]);
+                    var cout = new Span<double>(coutPtr, plan.N * 2);
+                    plan.Input.AsSpan().CopyTo(cout);
+
+                    for (var i = 1; i < cout.Length; i += 2)
+                    {
+                        cout[i] = -cout[i];
+                    }
                 }
             }
         }

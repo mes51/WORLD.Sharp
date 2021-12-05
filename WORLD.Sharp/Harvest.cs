@@ -1029,31 +1029,34 @@ namespace WORLD.Sharp
         void GetSpectra(Span<double> x, int fftSize, int[] baseIndex, double[] mainWindow, double[] diffWindow, ForwardRealFFT forwardRealFft, Complex[] mainSpectrum, Complex[] diffSpectrum)
         {
             var xLength = x.Length;
-            var safeIndex = Enumerable.Range(0, baseIndex.Length)
-                .Select((i) => Math.Max(0, Math.Min(xLength - 1, baseIndex[i] - 1)))
-                .ToArray();
+            var safeIndex = new int[baseIndex.Length];
+            for (var i = 0; i < safeIndex.Length; i++)
+            {
+                safeIndex[i] = Math.Max(0, Math.Min(xLength - 1, baseIndex[i] - 1));
+            }
+
             for (var i = 0; i < baseIndex.Length; i++)
             {
                 forwardRealFft.Waveform[i] = x[safeIndex[i]] * mainWindow[i];
             }
-            Array.Clear(forwardRealFft.Waveform, baseIndex.Length, fftSize - baseIndex.Length);
+            forwardRealFft.Waveform.AsSpan(baseIndex.Length, fftSize - baseIndex.Length).Clear();
 
             FFT.Execute(forwardRealFft.ForwardFFT);
             for (int i = 0, limit = fftSize / 2; i <= limit; i++)
             {
-                mainSpectrum[i] = new Complex(forwardRealFft.Spectrum[i].Real, forwardRealFft.Spectrum[i].Imaginary);
+                mainSpectrum[i] = forwardRealFft.Spectrum[i];
             }
 
             for (var i = 0; i < baseIndex.Length; i++)
             {
                 forwardRealFft.Waveform[i] = x[safeIndex[i]] * diffWindow[i];
             }
-            Array.Clear(forwardRealFft.Waveform, baseIndex.Length, fftSize - baseIndex.Length);
+            forwardRealFft.Waveform.AsSpan(baseIndex.Length, fftSize - baseIndex.Length).Clear()    ;
 
             FFT.Execute(forwardRealFft.ForwardFFT);
             for (int i = 0, limit = fftSize / 2; i <= limit; i++)
             {
-                diffSpectrum[i] = new Complex(forwardRealFft.Spectrum[i].Real, forwardRealFft.Spectrum[i].Imaginary);
+                diffSpectrum[i] = forwardRealFft.Spectrum[i];
             }
         }
 

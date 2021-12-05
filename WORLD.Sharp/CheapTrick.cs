@@ -168,7 +168,7 @@ namespace WORLD.Sharp
             var halfWindowLength = MatlabFunctions.MatlabRound(1.5 * fs / f0);
 
             // FFT
-            Array.Clear(forwardRealFFT.Waveform, halfWindowLength * 2 + 1, FFTSize - halfWindowLength * 2 - 1);
+            forwardRealFFT.Waveform.AsSpan(halfWindowLength * 2 + 1, FFTSize - halfWindowLength * 2 - 1).Clear();
             FFT.Execute(forwardRealFFT.ForwardFFT);
 
             var powerSpectrum = forwardRealFFT.Waveform;
@@ -201,8 +201,16 @@ namespace WORLD.Sharp
                 waveForm[i] = x[safeIndex[i]] * window[i] + rand.Next() * SafeGuardMinimum;
             }
 
-            var tmpWeight1 = waveForm.Take(halfWindowLength * 2 + 1).Sum();
-            var tmpWeight2 = window.Sum();
+            var tmpWeight1 = 0.0;
+            var tmpWeight2 = 0.0;
+            for (int i = 0, limit = halfWindowLength * 2 + 1; i < limit; i++)
+            {
+                tmpWeight1 += waveForm[i];
+            }
+            for (var i = 0; i < window.Length; i++)
+            {
+                tmpWeight2 += window[i];
+            }
             var weightingCoefficient = tmpWeight1 / tmpWeight2;
             for (int i = 0, limit = halfWindowLength * 2; i <= limit; i++)
             {
