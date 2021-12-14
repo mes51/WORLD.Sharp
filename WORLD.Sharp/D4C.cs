@@ -81,7 +81,10 @@ namespace WORLD.Sharp
 
                         return t;
                     },
-                    _ => { }
+                    t =>
+                    {
+                        t.ForwardRealFFT.Release();
+                    }
                 );
             }
             else
@@ -104,6 +107,8 @@ namespace WORLD.Sharp
                     // spectral representation.
                     GetAperiodicity(coarseFrequencyAxis, coarseAperiodicity, numberOfAperiodicities, frequencyAxis, fftSize, aperiodicity[i]);
                 }
+
+                forwardRealFFT.Release();
             }
         }
 
@@ -378,7 +383,10 @@ namespace WORLD.Sharp
 
                         return t;
                     },
-                    _ => { }
+                    t =>
+                    {
+                        t.ForwardRealFFT.Release();
+                    }
                 );
             }
             else
@@ -396,6 +404,8 @@ namespace WORLD.Sharp
                     aperiodicity0[i] = D4CLoveTrainSub(x, Math.Max(f0[i], lowestF0), temporalPositions[i], f0Length, fftSize, boundary0, boundary1, boundary2, rand, forwardRealFFT, powerSpectrum);
                     powerSpectrum.AsSpan().Clear();
                 }
+
+                forwardRealFFT.Release();
             }
         }
 

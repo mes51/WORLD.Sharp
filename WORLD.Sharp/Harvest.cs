@@ -981,6 +981,8 @@ namespace WORLD.Sharp
 
             var numberOfHarmonics = Math.Min((int)(fs / 2.0 / currentF0), 6);
             FixF0(powerSpectrum, numeratorI, fftSize, fs, currentF0, numberOfHarmonics, ref refinedF0, ref refinedScore);
+
+            forwardRealFft.Release();
         }
 
         //-----------------------------------------------------------------------------
@@ -1042,10 +1044,7 @@ namespace WORLD.Sharp
             forwardRealFft.Waveform.AsSpan(baseIndex.Length, fftSize - baseIndex.Length).Clear();
 
             FFT.Execute(forwardRealFft.ForwardFFT);
-            for (int i = 0, limit = fftSize / 2; i <= limit; i++)
-            {
-                mainSpectrum[i] = forwardRealFft.Spectrum[i];
-            }
+            forwardRealFft.Spectrum.AsSpan(0, fftSize / 2 + 1).CopyTo(mainSpectrum);
 
             for (var i = 0; i < baseIndex.Length; i++)
             {
@@ -1054,10 +1053,7 @@ namespace WORLD.Sharp
             forwardRealFft.Waveform.AsSpan(baseIndex.Length, fftSize - baseIndex.Length).Clear()    ;
 
             FFT.Execute(forwardRealFft.ForwardFFT);
-            for (int i = 0, limit = fftSize / 2; i <= limit; i++)
-            {
-                diffSpectrum[i] = forwardRealFft.Spectrum[i];
-            }
+            forwardRealFft.Spectrum.AsSpan(0, fftSize / 2 + 1).CopyTo(diffSpectrum);
         }
 
         void FixF0(double[] powerSpectrum, double[] numeratorI, int fftSize, double fs, double currentF0, int numberOfHarmonics, ref double refinedF0, ref double refinedScore)

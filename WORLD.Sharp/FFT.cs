@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
@@ -94,6 +95,29 @@ namespace WORLD.Sharp
             return new FFTPlan(n, FFTSign.Backward, flag, cin, null, null, @out, new double[n], ip, w);
         }
 
+        internal static FFTPlan CreatePlanForDftC2R(int n, Complex[] cin, double[] @out, double[] input, FFTFlag flag)
+        {
+            if (!C2RCache.ContainsKey(n))
+            {
+                lock (C2RCache)
+                {
+                    if (!C2RCache.ContainsKey(n))
+                    {
+                        var tip = new int[n];
+                        var tw = new double[n * 5 / 4];
+                        var c = new double[tw.Length - (n >> 2)];
+                        MakeWT(n >> 2, tip, tw);
+                        MakeCT(n >> 2, tip, c);
+                        c.BlockCopy(0, tw, n >> 2, c.Length);
+                        C2RCache.Add(n, Tuple.Create(tip, tw));
+                    }
+                }
+            }
+            var (ip, w) = C2RCache[n];
+
+            return new FFTPlan(n, FFTSign.Backward, flag, cin, null, null, @out, input, ip, w);
+        }
+
         public static FFTPlan CreatePlanForDftR2C(int n, double[] @in, Complex[] cout, FFTFlag flag)
         {
             if (!R2CCache.ContainsKey(n))
@@ -115,6 +139,29 @@ namespace WORLD.Sharp
             var (ip, w) = R2CCache[n];
 
             return new FFTPlan(n, FFTSign.Forward, flag, null, @in, cout, null, new double[n], ip, w);
+        }
+
+        internal static FFTPlan CreatePlanForDftR2C(int n, double[] @in, Complex[] cout, double[] input, FFTFlag flag)
+        {
+            if (!R2CCache.ContainsKey(n))
+            {
+                lock (R2CCache)
+                {
+                    if (!R2CCache.ContainsKey(n))
+                    {
+                        var tip = new int[n];
+                        var tw = new double[n * 5 / 4];
+                        var c = new double[tw.Length - (n >> 2)];
+                        MakeWT(n >> 2, tip, tw);
+                        MakeCT(n >> 2, tip, c);
+                        c.BlockCopy(0, tw, n >> 2, c.Length);
+                        R2CCache.Add(n, Tuple.Create(tip, tw));
+                    }
+                }
+            }
+            var (ip, w) = R2CCache[n];
+
+            return new FFTPlan(n, FFTSign.Forward, flag, null, @in, cout, null, input, ip, w);
         }
 
         static void MakeWT(int nw, int[] ip, double[] w)
@@ -223,20 +270,33 @@ namespace WORLD.Sharp
         public double[] Waveform { get; }
         public Complex[] Spectrum { get; }
         public FFTPlan ForwardFFT { get; }
+        double[] Input { get; set; }
 
-        ForwardRealFFT(int fftSize, double[] waveform, Complex[] spectrum, FFTPlan forwardFFT)
+        ForwardRealFFT(int fftSize, double[] waveform, double[] input, Complex[] spectrum, FFTPlan forwardFFT)
         {
             FFTSize = fftSize;
             Waveform = waveform;
             Spectrum = spectrum;
             ForwardFFT = forwardFFT;
+            Input = input;
+        }
+
+        public void Release()
+        {
+            ArrayPool<double>.Shared.Return(Waveform);
+            ArrayPool<double>.Shared.Return(Input);
+            ArrayPool<Complex>.Shared.Return(Spectrum);
         }
 
         public static ForwardRealFFT Create(int fftSize)
         {
-            var waveform = new double[fftSize];
-            var spectrum = new Complex[fftSize];
-            return new ForwardRealFFT(fftSize, waveform, spectrum, FFTPlan.CreatePlanForDftR2C(fftSize, waveform, spectrum, FFTFlag.Estimate));
+            var waveform = ArrayPool<double>.Shared.Rent(fftSize);
+            var input = ArrayPool<double>.Shared.Rent(fftSize);
+            var spectrum = ArrayPool<Complex>.Shared.Rent(fftSize);
+            waveform.AsSpan().Clear();
+            input.AsSpan().Clear();
+            spectrum.AsSpan().Clear();
+            return new ForwardRealFFT(fftSize, waveform, input, spectrum, FFTPlan.CreatePlanForDftR2C(fftSize, waveform, spectrum, input, FFTFlag.Estimate));
         }
     }
 
@@ -246,20 +306,33 @@ namespace WORLD.Sharp
         public double[] Waveform { get; }
         public Complex[] Spectrum { get; }
         public FFTPlan InverseFFT { get; }
+        double[] Input { get; set; }
 
-        InverseRealFFT(int fftSize, double[] waveform, Complex[] spectrum, FFTPlan inverseFFT)
+        InverseRealFFT(int fftSize, double[] waveform, double[] input, Complex[] spectrum, FFTPlan inverseFFT)
         {
             FFTSize = fftSize;
             Waveform = waveform;
             Spectrum = spectrum;
             InverseFFT = inverseFFT;
+            Input = input;
+        }
+
+        public void Release()
+        {
+            ArrayPool<double>.Shared.Return(Waveform);
+            ArrayPool<double>.Shared.Return(Input);
+            ArrayPool<Complex>.Shared.Return(Spectrum);
         }
 
         public static InverseRealFFT Create(int fftSize)
         {
-            var waveform = new double[fftSize];
-            var spectrum = new Complex[fftSize];
-            return new InverseRealFFT(fftSize, waveform, spectrum, FFTPlan.CreatePlanForDftC2R(fftSize, spectrum, waveform, FFTFlag.Estimate));
+            var waveform = ArrayPool<double>.Shared.Rent(fftSize);
+            var input = ArrayPool<double>.Shared.Rent(fftSize);
+            var spectrum = ArrayPool<Complex>.Shared.Rent(fftSize);
+            waveform.AsSpan().Clear();
+            input.AsSpan().Clear();
+            spectrum.AsSpan().Clear();
+            return new InverseRealFFT(fftSize, waveform, input, spectrum, FFTPlan.CreatePlanForDftC2R(fftSize, spectrum, waveform, input, FFTFlag.Estimate));
         }
     }
 

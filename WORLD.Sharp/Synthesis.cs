@@ -54,6 +54,9 @@ namespace WORLD.Sharp
                     y[index] += impulseResponse[j];
                 }
             }
+
+            inverseRealFFT.Release();
+            forwardRealFFT.Release();
         }
 
         //-----------------------------------------------------------------------------
@@ -967,6 +970,12 @@ namespace WORLD.Sharp
             }
 
             return dcRemover;
+        }
+
+        ~SynthesisRealTime()
+        {
+            InverseRealFFT.Release();
+            ForwardRealFFT.Release();
         }
     }
 }

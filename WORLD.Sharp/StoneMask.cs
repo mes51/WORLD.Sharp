@@ -88,6 +88,8 @@ namespace WORLD.Sharp
                 powerSpectrum[i] = mainSpectrum[i].Real * mainSpectrum[i].Real + mainSpectrum[i].Imaginary * mainSpectrum[i].Imaginary;
             }
 
+            forwardRealFFT.Release();
+
             return GetTentativeF0(powerSpectrum, numeratorI, fftSize, fs, initialF0);
         }
 

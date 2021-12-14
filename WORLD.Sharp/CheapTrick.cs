@@ -58,7 +58,11 @@ namespace WORLD.Sharp
 
                         return t;
                     },
-                    _ => { }
+                    t =>
+                    {
+                        t.ForwardRealFFT.Release();
+                        t.InverseRealFFT.Release();
+                    }
                 );
             }
             else
@@ -75,6 +79,9 @@ namespace WORLD.Sharp
 
                     spectralEnvelope.BlockCopy(0, spectrogram[i], 0, FFTSize / 2 + 1);
                 }
+
+                forwardRealFFT.Release();
+                inverseRealFFT.Release();
             }
         }
 

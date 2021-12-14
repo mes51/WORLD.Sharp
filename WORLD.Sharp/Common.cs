@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -43,13 +44,16 @@ namespace WORLD.Sharp
             var boundary = (int)(width * fftSize / fs) + 1;
 
             // These parameters are set by the other function.
-            var mirroringSpectrum = new double[fftSize / 2 + boundary * 2 + 1];
-            var mirroringSegment = new double[fftSize / 2 + boundary * 2 + 1];
-            var frequencyAxis = new double[fftSize / 2 + 1];
+            var halfFFTSize = fftSize / 2 + 1;
+            var pool = ArrayPool<double>.Shared;
+
+            var mirroringSpectrum = pool.Rent(fftSize / 2 + boundary * 2 + 1);
+            var mirroringSegment = pool.Rent(fftSize / 2 + boundary * 2 + 1);
+            var frequencyAxis = pool.Rent(fftSize / 2 + 1);
             SetParametersForLinearSmoothing(boundary, fftSize, fs, width, input, mirroringSpectrum, mirroringSegment, frequencyAxis);
 
-            var lowLevels = new double[fftSize / 2 + 1];
-            var highLevels = new double[fftSize / 2 + 1];
+            var lowLevels = pool.Rent(fftSize / 2 + 1);
+            var highLevels = pool.Rent(fftSize / 2 + 1);
             var originOfMirroringAxis = -(boundary - 0.5) * fs / fftSize;
             var discreteFrequencyInterval = (double)fs / fftSize;
 
@@ -66,6 +70,12 @@ namespace WORLD.Sharp
             {
                 output[i] = (highLevels[i] - lowLevels[i]) / width;
             }
+
+            pool.Return(mirroringSpectrum);
+            pool.Return(mirroringSegment);
+            pool.Return(frequencyAxis);
+            pool.Return(lowLevels);
+            pool.Return(highLevels);
         }
 
         static void SetParametersForLinearSmoothing(int boundary, int fftSize, int fs, double width, double[] powerSpectrum, double[] mirroringSpectrum, double[] mirroringSegment, double[] frequencyAxis)
