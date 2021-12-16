@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -131,8 +132,9 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         void SmoothingWithRecovery(double f0, int fs, ForwardRealFFT forwardRealFFT, InverseRealFFT inverseRealFFT, double[] spectralEnvelope)
         {
-            var smoothingLifter = new double[FFTSize];
-            var compensationLifter = new double[FFTSize];
+            var pool = ArrayPool<double>.Shared;
+            var smoothingLifter = pool.Rent(FFTSize);
+            var compensationLifter = pool.Rent(FFTSize);
 
             smoothingLifter[0] = 1;
             compensationLifter[0] = (1.0 - 2.0 * Q1) + 2.0 * Q1;
@@ -163,6 +165,9 @@ namespace WORLD.Sharp
             {
                 spectralEnvelope[i] = Math.Exp(inverseRealFFT.Waveform[i]);
             }
+
+            pool.Return(smoothingLifter);
+            pool.Return(compensationLifter);
         }
 
         //-----------------------------------------------------------------------------
@@ -195,9 +200,11 @@ namespace WORLD.Sharp
         {
             var halfWindowLength = MatlabFunctions.MatlabRound(1.5 * fs / currentF0);
 
-            var baseIndex = new int[halfWindowLength * 2 + 1];
-            var safeIndex = new int[halfWindowLength * 2 + 1];
-            var window = new double[halfWindowLength * 2 + 1];
+            var windowSize = halfWindowLength * 2 + 1;
+            var intPool = ArrayPool<int>.Shared;
+            var baseIndex = intPool.Rent(windowSize);
+            var safeIndex = intPool.Rent(windowSize);
+            var window = ArrayPool<double>.Shared.Rent(windowSize);
 
             SetParametersForGetWindowedWaveform(halfWindowLength, x.Length, currentPosition, fs, currentF0, baseIndex, safeIndex, window);
 
@@ -223,6 +230,10 @@ namespace WORLD.Sharp
             {
                 waveForm[i] -= window[i] * weightingCoefficient;
             }
+
+            intPool.Return(baseIndex);
+            intPool.Return(safeIndex);
+            ArrayPool<double>.Shared.Return(window);
         }
 
         //-----------------------------------------------------------------------------

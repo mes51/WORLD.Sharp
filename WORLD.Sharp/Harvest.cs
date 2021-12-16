@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -318,7 +319,7 @@ namespace WORLD.Sharp
             var boundaryList = new int[newF0Length];
             var numberOfBoundaries = GetBoundaryList(f0Counter, newF0Length, boundaryList);
             var multiChannelF0 = Util.Mak2DArray<double>(numberOfBoundaries / 2, newF0Length);
-            GetMultiChannelF0(f0Counter, newF0Length, boundaryList, numberOfBoundaries, multiChannelF0);
+            GetMultiChannelF0(f0Counter, boundaryList, numberOfBoundaries, multiChannelF0);
 
             for (int i = 0, limit = numberOfBoundaries / 2; i < limit; i++)
             {
@@ -362,6 +363,8 @@ namespace WORLD.Sharp
             var zeroCrossings = ZeroCrossings.GetFourZeroCrossingIntervals(filteredSignal, yLength, fs);
 
             GetF0CandidateContour(zeroCrossings, boundaryF0, temporalPositions, f0Length, f0Candidates);
+
+            zeroCrossings.Release();
         }
 
         //-----------------------------------------------------------------------------
@@ -591,15 +594,13 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         // GetMultiChannelF0() separates each voiced section into independent channel.
         //-----------------------------------------------------------------------------
-        void GetMultiChannelF0(double[] f0, int f0Length, int[] boundaryList, int numberOfBoundaries, double[][] multiChannelF0)
+        void GetMultiChannelF0(double[] f0, int[] boundaryList, int numberOfBoundaries, double[][] multiChannelF0)
         {
             for (int i = 0, iLimit = numberOfBoundaries / 2; i < iLimit; i++)
             {
                 Array.Clear(multiChannelF0[i], 0, multiChannelF0[i].Length);
-                for (int j = boundaryList[i * 2], jLimit = boundaryList[i * 2 + 1]; j <= jLimit; j++)
-                {
-                    multiChannelF0[i][j] = f0[j];
-                }
+                var j = i * 2;
+                f0.BlockCopy(boundaryList[j], multiChannelF0[i], boundaryList[j], boundaryList[j + 1] - boundaryList[j] + 1);
             }
         }
 
@@ -703,7 +704,7 @@ namespace WORLD.Sharp
             var numberOfBoundaries = GetBoundaryList(f0Step2, f0Length, boundaryList);
 
             var multiChannelF0 = Util.Mak2DArray<double>(numberOfBoundaries / 2, f0Length);
-            GetMultiChannelF0(f0Step2, f0Length, boundaryList, numberOfBoundaries, multiChannelF0);
+            GetMultiChannelF0(f0Step2, boundaryList, numberOfBoundaries, multiChannelF0);
 
             var numberOfChannels = Extend(multiChannelF0, numberOfBoundaries / 2, f0Length, boundaryList, f0Candidates, numberOfCandidates, allowedRange, multiChannelF0, boundaryList);
 
@@ -957,23 +958,28 @@ namespace WORLD.Sharp
 
         void GetMeanF0(Span<double> x, double fs, double currentPosition, double currentF0, int fftSize, double windowLengthInTime, double[] baseTime, ref double refinedF0, ref double refinedScore)
         {
+            var complexPool = ArrayPool<Complex>.Shared;
+            var doublePool = ArrayPool<double>.Shared;
             var forwardRealFft = ForwardRealFFT.Create(fftSize);
-            var mainSpectrum = new Complex[fftSize];
-            var diffSpectrum = new Complex[fftSize];
+            var mainSpectrum = complexPool.Rent(fftSize);
+            var diffSpectrum = complexPool.Rent(fftSize);
+            mainSpectrum.AsSpan().Clear();
+            diffSpectrum.AsSpan().Clear();
 
-            var baseIndex = new int[baseTime.Length];
-            var mainWindow = new double[baseTime.Length];
-            var diffWindow = new double[baseTime.Length];
+            var baseIndex = ArrayPool<int>.Shared.Rent(baseTime.Length);
+            var mainWindow = doublePool.Rent(baseTime.Length);
+            var diffWindow = doublePool.Rent(baseTime.Length);
 
-            GetBaseIndex(currentPosition, baseTime, fs, baseIndex);
-            GetMainWindow(currentPosition, baseIndex, fs, windowLengthInTime, mainWindow);
-            GetDiffWindow(mainWindow, diffWindow);
+            GetBaseIndex(currentPosition, baseTime, fs, baseIndex.AsSpan(0, baseTime.Length));
+            GetMainWindow(currentPosition, baseIndex, fs, windowLengthInTime, mainWindow.AsSpan(0, baseTime.Length));
+            GetDiffWindow(mainWindow.AsSpan(0, baseTime.Length), diffWindow.AsSpan(0, baseTime.Length));
 
-            GetSpectra(x, fftSize, baseIndex, mainWindow, diffWindow, forwardRealFft, mainSpectrum, diffSpectrum);
+            GetSpectra(x, fftSize, baseIndex.AsSpan(0, baseTime.Length), mainWindow.AsSpan(0, baseTime.Length), diffWindow.AsSpan(0, baseTime.Length), forwardRealFft, mainSpectrum, diffSpectrum);
 
-            var powerSpectrum = new double[fftSize / 2 + 1];
-            var numeratorI = new double[fftSize / 2 + 1];
-            for (var j = 0; j < powerSpectrum.Length; j++)
+            var halfFFTSize = fftSize / 2 + 1;
+            var powerSpectrum = doublePool.Rent(halfFFTSize);
+            var numeratorI = doublePool.Rent(halfFFTSize);
+            for (var j = 0; j < halfFFTSize; j++)
             {
                 powerSpectrum[j] = mainSpectrum[j].Real * mainSpectrum[j].Real + mainSpectrum[j].Imaginary * mainSpectrum[j].Imaginary;
                 numeratorI[j] = mainSpectrum[j].Real * diffSpectrum[j].Imaginary - mainSpectrum[j].Imaginary * diffSpectrum[j].Real;
@@ -983,12 +989,19 @@ namespace WORLD.Sharp
             FixF0(powerSpectrum, numeratorI, fftSize, fs, currentF0, numberOfHarmonics, ref refinedF0, ref refinedScore);
 
             forwardRealFft.Release();
+            complexPool.Return(mainSpectrum);
+            complexPool.Return(diffSpectrum);
+            ArrayPool<int>.Shared.Return(baseIndex);
+            doublePool.Return(mainWindow);
+            doublePool.Return(diffWindow);
+            doublePool.Return(powerSpectrum);
+            doublePool.Return(numeratorI);
         }
 
         //-----------------------------------------------------------------------------
         // GetBaseIndex() calculates the temporal positions for windowing.
         //-----------------------------------------------------------------------------
-        void GetBaseIndex(double currentPosition, double[] baseTime, double fs, int[] baseIndex)
+        void GetBaseIndex(double currentPosition, double[] baseTime, double fs, Span<int> baseIndex)
         {
             // First-aid treatment
             var basicIndex = MatlabFunctions.MatlabRound((currentPosition + baseTime[0]) * fs + 0.001);
@@ -1001,7 +1014,7 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         // GetMainWindow() generates the window function.
         //-----------------------------------------------------------------------------
-        void GetMainWindow(double currentPosition, int[] baseIndex, double fs, double windowLengthInTime, double[] mainWindow)
+        void GetMainWindow(double currentPosition, int[] baseIndex, double fs, double windowLengthInTime, Span<double> mainWindow)
         {
             for (var i = 0; i < mainWindow.Length; i++)
             {
@@ -1014,7 +1027,7 @@ namespace WORLD.Sharp
         // GetDiffWindow() generates the differentiated window.
         // Diff means differential.
         //-----------------------------------------------------------------------------
-        void GetDiffWindow(double[] mainWindow, double[] diffWindow)
+        void GetDiffWindow(ReadOnlySpan<double> mainWindow, Span<double> diffWindow)
         {
             diffWindow[0] = -mainWindow[1] / 2.0;
             for (int i = 1, limit = diffWindow.Length - 1; i < limit; i++)
@@ -1028,11 +1041,11 @@ namespace WORLD.Sharp
         // GetSpectra() calculates two spectra of the waveform windowed by windows
         // (main window and diff window).
         //-----------------------------------------------------------------------------
-        void GetSpectra(Span<double> x, int fftSize, int[] baseIndex, double[] mainWindow, double[] diffWindow, ForwardRealFFT forwardRealFft, Complex[] mainSpectrum, Complex[] diffSpectrum)
+        void GetSpectra(Span<double> x, int fftSize, ReadOnlySpan<int> baseIndex, ReadOnlySpan<double> mainWindow, ReadOnlySpan<double> diffWindow, ForwardRealFFT forwardRealFft, Complex[] mainSpectrum, Complex[] diffSpectrum)
         {
             var xLength = x.Length;
-            var safeIndex = new int[baseIndex.Length];
-            for (var i = 0; i < safeIndex.Length; i++)
+            var safeIndex = ArrayPool<int>.Shared.Rent(baseIndex.Length);
+            for (var i = 0; i < baseIndex.Length; i++)
             {
                 safeIndex[i] = Math.Max(0, Math.Min(xLength - 1, baseIndex[i] - 1));
             }
@@ -1054,6 +1067,8 @@ namespace WORLD.Sharp
 
             FFT.Execute(forwardRealFft.ForwardFFT);
             forwardRealFft.Spectrum.AsSpan(0, fftSize / 2 + 1).CopyTo(diffSpectrum);
+
+            ArrayPool<int>.Shared.Return(safeIndex);
         }
 
         void FixF0(double[] powerSpectrum, double[] numeratorI, int fftSize, double fs, double currentF0, int numberOfHarmonics, ref double refinedF0, ref double refinedScore)

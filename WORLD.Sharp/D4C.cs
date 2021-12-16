@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -129,9 +130,13 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         void D4CGeneralBody(double[] x, double currentF0, int fftSize, double currentPosition, int numberOfAperiodicities, double[] window, MVN rand, ForwardRealFFT forwardRealFFT, Span<double> coarseAperiodicity)
         {
-            var staticCentroid = new double[fftSize / 2 + 1];
-            var smoothedPowerSpectrum = new double[fftSize / 2 + 1];
-            var staticGroupDelay = new double[fftSize / 2 + 1];
+            var halfFFTSize = fftSize / 2 + 1;
+            var pool = ArrayPool<double>.Shared;
+
+            var staticCentroid = pool.Rent(halfFFTSize);
+            var smoothedPowerSpectrum = pool.Rent(halfFFTSize);
+            var staticGroupDelay = pool.Rent(halfFFTSize);
+
             GetStaticCentroid(x, currentF0, fftSize, currentPosition, rand, forwardRealFFT, staticCentroid);
             GetSmoothedPowerSpectrum(x, currentF0, fftSize, currentPosition, rand, forwardRealFFT, smoothedPowerSpectrum);
             GetStaticGroupDelay(staticCentroid, smoothedPowerSpectrum, currentF0, fftSize, staticGroupDelay);
@@ -143,6 +148,10 @@ namespace WORLD.Sharp
             {
                 coarseAperiodicity[i] = Math.Min(0.0, coarseAperiodicity[i] + (currentF0 - 100) / 50.0);
             }
+
+            pool.Return(staticCentroid);
+            pool.Return(smoothedPowerSpectrum);
+            pool.Return(staticGroupDelay);
         }
 
         //-----------------------------------------------------------------------------
@@ -156,7 +165,8 @@ namespace WORLD.Sharp
 
             Array.Clear(forwardRealFFT.Waveform, 0, fftSize);
 
-            var powerSpectrum = new double[fftSize / 2 + 1];
+            var halfFFTSize = fftSize / 2 + 1;
+            var powerSpectrum = ArrayPool<double>.Shared.Rent(halfFFTSize);
             for (var i = 0; i < numberOfAperiodicities; i++)
             {
                 var center = (int)(FrequencyInterval * (i + 1) * fftSize / Fs);
@@ -167,19 +177,21 @@ namespace WORLD.Sharp
                 FFT.Execute(forwardRealFFT.ForwardFFT);
 
                 var spectrum = forwardRealFFT.Spectrum;
-                for (int j = 0, limit = fftSize / 2; j <= limit; j++)
+                for (var j = 0; j < halfFFTSize; j++)
                 {
                     powerSpectrum[j] = spectrum[j].Real * spectrum[j].Real + spectrum[j].Imaginary * spectrum[j].Imaginary;
                 }
 
-                Array.Sort(powerSpectrum);
-                for (int j = 1, limit = fftSize / 2; j <= limit; j++)
+                Array.Sort(powerSpectrum, 0, halfFFTSize);
+                for (var j = 1; j < halfFFTSize; j++)
                 {
                     powerSpectrum[j] += powerSpectrum[j - 1];
                 }
 
                 coarseAperiodicity[i] = 10.0 * Math.Log10(powerSpectrum[fftSize / 2 - boundary - 1] / powerSpectrum[fftSize / 2]);
             }
+
+            ArrayPool<double>.Shared.Return(powerSpectrum);
         }
 
         //-----------------------------------------------------------------------------
@@ -194,13 +206,16 @@ namespace WORLD.Sharp
             }
             Common.LinearSmoothing(staticGroupDelay, f0 / 2.0, Fs, fftSize, staticGroupDelay);
 
-            var smoothedGroupDelay = new double[fftSize / 2 + 1];
+            var halfFFTSize = fftSize / 2 + 1;
+            var smoothedGroupDelay = ArrayPool<double>.Shared.Rent(halfFFTSize);
             Common.LinearSmoothing(staticGroupDelay, f0, Fs, fftSize, smoothedGroupDelay);
 
-            for (int i = 0, limit = fftSize / 2; i <= limit; i++)
+            for (var i = 0; i < halfFFTSize; i++)
             {
                 staticGroupDelay[i] -= smoothedGroupDelay[i];
             }
+
+            ArrayPool<double>.Shared.Return(smoothedGroupDelay);
         }
 
         //-----------------------------------------------------------------------------
@@ -228,19 +243,24 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         void GetStaticCentroid(double[] x, double currentF0, int fftSize, double currentPosition, MVN rand, ForwardRealFFT forwardRealFFT, double[] staticCentroid)
         {
-            var centroid1 = new double[fftSize / 2 + 1];
-            var centroid2 = new double[fftSize / 2 + 1];
+            var halfFFTSize = fftSize / 2 + 1;
+            var pool = ArrayPool<double>.Shared;
+
+            var centroid1 = pool.Rent(halfFFTSize);
+            var centroid2 = pool.Rent(halfFFTSize);
 
             GetCentroid(x, currentF0, fftSize, currentPosition - 0.25 / currentF0, rand, forwardRealFFT, centroid1);
             GetCentroid(x, currentF0, fftSize, currentPosition + 0.25 / currentF0, rand, forwardRealFFT, centroid2);
 
-            for (int i = 0, limit = fftSize / 2; i <= limit; i++)
+            for (var i = 0; i < halfFFTSize; i++)
             {
                 staticCentroid[i] = centroid1[i] + centroid2[i];
             }
 
             Common.DCCorrection(staticCentroid, currentF0, Fs, fftSize, staticCentroid);
 
+            pool.Return(centroid1);
+            pool.Return(centroid2);
         }
 
         void GetCentroid(double[] x, double currentF0, int fftSize, double currentPosition, MVN rand, ForwardRealFFT forwardRealFFT, double[] centroid)
@@ -262,7 +282,8 @@ namespace WORLD.Sharp
             }
 
             FFT.Execute(forwardRealFFT.ForwardFFT);
-            var tmpSpectrum = new Complex[fftSize / 2 + 1];
+            var halfFFTSize = fftSize / 2 + 1;
+            var tmpSpectrum = ArrayPool<Complex>.Shared.Rent(halfFFTSize);
             forwardRealFFT.Spectrum.AsSpan(0, tmpSpectrum.Length).CopyTo(tmpSpectrum);
 
             for (var i = 0; i < fftSize; i++)
@@ -271,10 +292,12 @@ namespace WORLD.Sharp
             }
             FFT.Execute(forwardRealFFT.ForwardFFT);
             var spectrum = forwardRealFFT.Spectrum;
-            for (int i = 0, limit = fftSize / 2; i <= limit; i++)
+            for (var i = 0; i < halfFFTSize; i++)
             {
                 centroid[i] = spectrum[i].Real * tmpSpectrum[i].Real + spectrum[i].Imaginary * tmpSpectrum[i].Imaginary;
             }
+
+            ArrayPool<Complex>.Shared.Return(tmpSpectrum);
         }
 
         //-----------------------------------------------------------------------------
@@ -284,14 +307,16 @@ namespace WORLD.Sharp
         void GetWindowedWaveform(double[] x, double currentF0, double currentPosition, WindowType windowType, double windowLengthRatio, MVN rand, double[] waveform)
         {
             var halfWindowLength = MatlabFunctions.MatlabRound(windowLengthRatio * Fs / currentF0 / 2.0);
+            var windowLength = halfWindowLength * 2 + 1;
+            var intPool = ArrayPool<int>.Shared;
 
-            var baseIndex = new int[halfWindowLength * 2 + 1];
-            var safeIndex = new int[halfWindowLength * 2 + 1];
-            var window = new double[halfWindowLength * 2 + 1];
+            var baseIndex = intPool.Rent(windowLength);
+            var safeIndex = intPool.Rent(windowLength);
+            var window = ArrayPool<double>.Shared.Rent(windowLength);
 
             SetParametersForGetWindowedWaveform(halfWindowLength, x.Length, currentPosition, currentF0, windowType, windowLengthRatio, baseIndex, safeIndex, window);
 
-            for (int i = 0, limit = halfWindowLength * 2; i <= limit; i++)
+            for (var i = 0; i < windowLength; i++)
             {
                 waveform[i] = x[safeIndex[i]] * window[i] + rand.GenerateMVN() * SafeGuardMinimum;
             }
@@ -311,6 +336,10 @@ namespace WORLD.Sharp
             {
                 waveform[i] -= window[i] * weightingCoefficient;
             }
+
+            intPool.Return(baseIndex);
+            intPool.Return(safeIndex);
+            ArrayPool<double>.Shared.Return(window);
         }
 
         //-----------------------------------------------------------------------------

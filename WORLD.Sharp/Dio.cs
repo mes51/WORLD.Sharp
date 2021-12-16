@@ -265,6 +265,7 @@ namespace WORLD.Sharp
 
             var zeroCrossings = ZeroCrossings.GetFourZeroCrossingIntervals(filteredSignal, yLength, fs);
             GetF0CandidateContour(zeroCrossings, boundaryF0, temporalPositions, f0Length, f0Candidate, f0Score);
+            zeroCrossings.Release();
         }
 
         //-----------------------------------------------------------------------------

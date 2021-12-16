@@ -27,8 +27,14 @@ namespace WORLD.Sharp
         public static void DCCorrection(double[] input, double f0, int fs, int fftSize, double[] output)
         {
             var upperLimit = 2 + (int)(f0 * fftSize / fs);
-            var lowFrequencyReplica = new double[upperLimit];
-            var lowFrequencyAxis = Enumerable.Range(0, upperLimit).Select((i) => (double)i * fs / fftSize).ToArray();
+            var pool = ArrayPool<double>.Shared;
+
+            var lowFrequencyReplica = pool.Rent(upperLimit);
+            var lowFrequencyAxis = pool.Rent(upperLimit);
+            for (var i = 0; i < upperLimit; i++)
+            {
+                lowFrequencyAxis[i] = (double)i * fs / fftSize;
+            }
 
             var upperLimitReplica = upperLimit - 1;
             MatlabFunctions.Interp1Q(f0 - lowFrequencyAxis[0], -(double)fs / fftSize, input.AsSpan(0, upperLimit + 1), lowFrequencyAxis.AsSpan(0, upperLimitReplica), lowFrequencyReplica);
@@ -37,6 +43,9 @@ namespace WORLD.Sharp
             {
                 output[i] = input[i] + lowFrequencyReplica[i];
             }
+
+            pool.Return(lowFrequencyReplica);
+            pool.Return(lowFrequencyAxis);
         }
 
         public static void LinearSmoothing(double[] input, double width, int fs, int fftSize, double[] output)

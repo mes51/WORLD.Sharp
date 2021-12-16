@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -157,12 +158,12 @@ namespace WORLD.Sharp
 
         public static void Interp1(Span<double> x, double[] y, Span<double> xi, double[] yi)
         {
-            var h = new double[x.Length - 1];
-            for (var i = 0; i < h.Length; i++)
+            var h = ArrayPool<double>.Shared.Rent(x.Length - 1);
+            for (int i = 0, limit = x.Length - 1; i < limit; i++)
             {
                 h[i] = x[i + 1] - x[i];
             }
-            var k = new int[xi.Length];
+            var k = ArrayPool<int>.Shared.Rent(xi.Length);
             Histc(x, xi, k);
 
             for (var i = 0; i < xi.Length; i++)
@@ -170,6 +171,9 @@ namespace WORLD.Sharp
                 var s = (xi[i] - x[k[i] - 1]) / h[k[i] - 1];
                 yi[i] = y[k[i] - 1] + s * (y[k[i]] - y[k[i] - 1]);
             }
+
+            ArrayPool<double>.Shared.Return(h);
+            ArrayPool<int>.Shared.Return(k);
         }
 
         public static void Decimate(double[] x, int r, double[] result)
@@ -214,7 +218,7 @@ namespace WORLD.Sharp
 
         public static void Interp1Q(double x, double shift, Span<double> y, Span<double> xi, double[] yi)
         {
-            var deltaY = new double[y.Length];
+            var deltaY = ArrayPool<double>.Shared.Rent(y.Length);
             Diff(y, deltaY);
             deltaY[y.Length - 1] = 0.0;
 
@@ -224,6 +228,8 @@ namespace WORLD.Sharp
                 var xiFraction = (xi[i] - x) / shift - xiBase;
                 yi[i] = y[xiBase] + deltaY[xiBase] * xiFraction;
             }
+
+            ArrayPool<double>.Shared.Return(deltaY);
         }
 
         static void FastFFTFilt(double[] x, double[] h, int fftSize, ForwardRealFFT forwardRealFFT, InverseRealFFT inverseRealFFT, double[] y)
