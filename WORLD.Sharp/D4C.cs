@@ -158,7 +158,7 @@ namespace WORLD.Sharp
         // GetCoarseAperiodicity() calculates the aperiodicity in multiples of 3 kHz.
         // The upper limit is given based on the sampling frequency.
         //-----------------------------------------------------------------------------
-        private void GetCoarseAperiodicity(double[] staticGroupDelay, int fftSize, int numberOfAperiodicities, double[] window, ForwardRealFFT forwardRealFFT, Span<double> coarseAperiodicity)
+        void GetCoarseAperiodicity(double[] staticGroupDelay, int fftSize, int numberOfAperiodicities, double[] window, ForwardRealFFT forwardRealFFT, Span<double> coarseAperiodicity)
         {
             var boundary = MatlabFunctions.MatlabRound(fftSize * 8.0 / window.Length);
             var halfWindowLength = window.Length / 2;
@@ -182,16 +182,32 @@ namespace WORLD.Sharp
                     powerSpectrum[j] = spectrum[j].Real * spectrum[j].Real + spectrum[j].Imaginary * spectrum[j].Imaginary;
                 }
 
-                Array.Sort(powerSpectrum, 0, halfFFTSize);
-                for (var j = 1; j < halfFFTSize; j++)
-                {
-                    powerSpectrum[j] += powerSpectrum[j - 1];
-                }
-
-                coarseAperiodicity[i] = 10.0 * Math.Log10(powerSpectrum[fftSize / 2 - boundary - 1] / powerSpectrum[fftSize / 2]);
+                coarseAperiodicity[i] = 10.0 * Math.Log10(CalcPowerSpectrumRate(powerSpectrum, fftSize, boundary));
             }
 
             ArrayPool<double>.Shared.Return(powerSpectrum);
+        }
+
+        double CalcPowerSpectrumRate(double[] powerSpectrum, int fftSize, int boundary)
+        {
+            var halfFFTSize = fftSize / 2 + 1;
+            var boundaryPos = fftSize / 2 - boundary - 1;
+
+            var sum = 0.0;
+            for (var i = 0; i < halfFFTSize; i++)
+            {
+                sum += powerSpectrum[i];
+            }
+
+            LargeOnlyGrouping.Grouping(powerSpectrum, halfFFTSize, boundaryPos + 1);
+
+            var boundarySum = 0.0;
+            for (var i = 0; i <= boundaryPos; i++)
+            {
+                boundarySum += powerSpectrum[i];
+            }
+
+            return boundarySum / sum;
         }
 
         //-----------------------------------------------------------------------------
@@ -457,6 +473,76 @@ namespace WORLD.Sharp
             }
 
             return powerSpectrum[boundary1] / powerSpectrum[boundary2];
+        }
+    }
+
+    static class LargeOnlyGrouping
+    {
+        const int SwitchThreshold = 64;
+
+        public static void Grouping(double[] values, int end, int limit)
+        {
+            QuickSort(values, 0, end, limit);
+        }
+
+        static void QuickSort(double[] values, int start, int end, int limit)
+        {
+            if (end - start < SwitchThreshold)
+            {
+                Array.Sort(values, start, end - start + 1);
+                return;
+            }
+
+            var pivot = Median(values[start], values[start + (end - start) / 2], values[end]);
+
+            var left = start;
+            var right = end;
+            while (left <= right)
+            {
+                for (; left < end && pivot > values[left]; left++) ;
+                for (; right > start && pivot <= values[right]; right--) ;
+
+                if (left > right)
+                {
+                    break;
+                }
+                Swap(ref values[left], ref values[right]);
+                left++;
+                right--;
+            }
+
+            if (left > limit)
+            {
+                QuickSort(values, start, left - 1, limit);
+            }
+            else if (left != limit)
+            {
+                QuickSort(values, left, end, limit);
+            }
+        }
+
+        static double Median(double a, double b, double c)
+        {
+            if (a > b)
+            {
+                Swap(ref a, ref b);
+            }
+            if (a > c)
+            {
+                Swap(ref a, ref c);
+            }
+            if (b > c)
+            {
+                Swap(ref b, ref c);
+            }
+            return b;
+        }
+
+        static void Swap(ref double a, ref double b)
+        {
+            var t = a;
+            a = b;
+            b = t;
         }
     }
 }
