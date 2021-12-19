@@ -430,7 +430,7 @@ namespace WORLD.Sharp
                     var cout = new Span<double>(coutPtr, plan.N + 2);
                     cout[0] = plan.Input[0];
                     cout[1] = 0.0;
-                    plan.Input.AsSpan(2).CopyTo(cout.Slice(2, plan.N - 2));
+                    plan.Input.AsSpan(2, plan.N - 2).CopyTo(cout.Slice(2, plan.N - 2));
 
                     for (var i = 1; i < cout.Length; i += 2)
                     {

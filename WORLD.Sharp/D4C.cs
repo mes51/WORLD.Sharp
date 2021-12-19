@@ -300,7 +300,7 @@ namespace WORLD.Sharp
             FFT.Execute(forwardRealFFT.ForwardFFT);
             var halfFFTSize = fftSize / 2 + 1;
             var tmpSpectrum = ArrayPool<Complex>.Shared.Rent(halfFFTSize);
-            forwardRealFFT.Spectrum.AsSpan(0, tmpSpectrum.Length).CopyTo(tmpSpectrum);
+            forwardRealFFT.Spectrum.AsSpan(0, halfFFTSize).CopyTo(tmpSpectrum);
 
             for (var i = 0; i < fftSize; i++)
             {
