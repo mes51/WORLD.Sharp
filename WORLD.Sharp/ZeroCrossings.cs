@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -56,7 +55,7 @@ namespace WORLD.Sharp
 
         public void Release()
         {
-            var pool = ArrayPool<double>.Shared;
+            var pool = ArrayPoolHolder<double>.Shared;
             pool.Return(NegativeIntervalLocations);
             pool.Return(NegativeIntervals);
             pool.Return(PositiveIntervalLocations);
@@ -76,7 +75,7 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         public static ZeroCrossings GetFourZeroCrossingIntervals(double[] filteredSignal, int yLength, double actualFs)
         {
-            var pool = ArrayPool<double>.Shared;
+            var pool = ArrayPoolHolder<double>.Shared;
             var negativeIntervalLocations = pool.Rent(yLength);
             var negativeIntervals = pool.Rent(yLength);
             var positiveIntervalLocations = pool.Rent(yLength);
@@ -129,7 +128,7 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         static int ZeroCrossingEngine(double[] filteredSignal, int yLength, double fs, double[] intervalLocations, double[] intervals)
         {
-            var pool = ArrayPool<int>.Shared;
+            var pool = ArrayPoolHolder<int>.Shared;
             var negativeGoingPoints = pool.Rent(yLength);
             for (int i = 0, limit = yLength - 1; i < limit; i++)
             {

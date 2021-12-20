@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -27,7 +26,7 @@ namespace WORLD.Sharp
         public static void DCCorrection(double[] input, double f0, int fs, int fftSize, double[] output)
         {
             var upperLimit = 2 + (int)(f0 * fftSize / fs);
-            var pool = ArrayPool<double>.Shared;
+            var pool = ArrayPoolHolder<double>.Shared;
 
             var lowFrequencyReplica = pool.Rent(upperLimit);
             var lowFrequencyAxis = pool.Rent(upperLimit);
@@ -54,7 +53,7 @@ namespace WORLD.Sharp
 
             // These parameters are set by the other function.
             var halfFFTSize = fftSize / 2 + 1;
-            var pool = ArrayPool<double>.Shared;
+            var pool = ArrayPoolHolder<double>.Shared;
 
             var mirroringSpectrum = pool.Rent(fftSize / 2 + boundary * 2 + 1);
             var mirroringSegment = pool.Rent(fftSize / 2 + boundary * 2 + 1);

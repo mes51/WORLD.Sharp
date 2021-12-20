@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -132,7 +131,7 @@ namespace WORLD.Sharp
         //-----------------------------------------------------------------------------
         void SmoothingWithRecovery(double f0, int fs, ForwardRealFFT forwardRealFFT, InverseRealFFT inverseRealFFT, double[] spectralEnvelope)
         {
-            var pool = ArrayPool<double>.Shared;
+            var pool = ArrayPoolHolder<double>.Shared;
             var smoothingLifter = pool.Rent(FFTSize);
             var compensationLifter = pool.Rent(FFTSize);
 
@@ -201,10 +200,10 @@ namespace WORLD.Sharp
             var halfWindowLength = MatlabFunctions.MatlabRound(1.5 * fs / currentF0);
 
             var windowSize = halfWindowLength * 2 + 1;
-            var intPool = ArrayPool<int>.Shared;
+            var intPool = ArrayPoolHolder<int>.Shared;
             var baseIndex = intPool.Rent(windowSize);
             var safeIndex = intPool.Rent(windowSize);
-            var window = ArrayPool<double>.Shared.Rent(windowSize);
+            var window = ArrayPoolHolder<double>.Shared.Rent(windowSize);
 
             SetParametersForGetWindowedWaveform(halfWindowLength, x.Length, currentPosition, fs, currentF0, baseIndex, safeIndex, window);
 
@@ -233,7 +232,7 @@ namespace WORLD.Sharp
 
             intPool.Return(baseIndex);
             intPool.Return(safeIndex);
-            ArrayPool<double>.Shared.Return(window);
+            ArrayPoolHolder<double>.Shared.Return(window);
         }
 
         //-----------------------------------------------------------------------------

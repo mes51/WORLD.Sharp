@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -958,15 +957,15 @@ namespace WORLD.Sharp
 
         void GetMeanF0(Span<double> x, double fs, double currentPosition, double currentF0, int fftSize, double windowLengthInTime, double[] baseTime, ref double refinedF0, ref double refinedScore)
         {
-            var complexPool = ArrayPool<Complex>.Shared;
-            var doublePool = ArrayPool<double>.Shared;
+            var complexPool = ArrayPoolHolder<Complex>.Shared;
+            var doublePool = ArrayPoolHolder<double>.Shared;
             var forwardRealFft = ForwardRealFFT.Create(fftSize);
             var mainSpectrum = complexPool.Rent(fftSize);
             var diffSpectrum = complexPool.Rent(fftSize);
             mainSpectrum.AsSpan().Clear();
             diffSpectrum.AsSpan().Clear();
 
-            var baseIndex = ArrayPool<int>.Shared.Rent(baseTime.Length);
+            var baseIndex = ArrayPoolHolder<int>.Shared.Rent(baseTime.Length);
             var mainWindow = doublePool.Rent(baseTime.Length);
             var diffWindow = doublePool.Rent(baseTime.Length);
 
@@ -991,7 +990,7 @@ namespace WORLD.Sharp
             forwardRealFft.Release();
             complexPool.Return(mainSpectrum);
             complexPool.Return(diffSpectrum);
-            ArrayPool<int>.Shared.Return(baseIndex);
+            ArrayPoolHolder<int>.Shared.Return(baseIndex);
             doublePool.Return(mainWindow);
             doublePool.Return(diffWindow);
             doublePool.Return(powerSpectrum);
@@ -1044,7 +1043,7 @@ namespace WORLD.Sharp
         void GetSpectra(Span<double> x, int fftSize, ReadOnlySpan<int> baseIndex, ReadOnlySpan<double> mainWindow, ReadOnlySpan<double> diffWindow, ForwardRealFFT forwardRealFft, Complex[] mainSpectrum, Complex[] diffSpectrum)
         {
             var xLength = x.Length;
-            var safeIndex = ArrayPool<int>.Shared.Rent(baseIndex.Length);
+            var safeIndex = ArrayPoolHolder<int>.Shared.Rent(baseIndex.Length);
             for (var i = 0; i < baseIndex.Length; i++)
             {
                 safeIndex[i] = Math.Max(0, Math.Min(xLength - 1, baseIndex[i] - 1));
@@ -1068,7 +1067,7 @@ namespace WORLD.Sharp
             FFT.Execute(forwardRealFft.ForwardFFT);
             forwardRealFft.Spectrum.AsSpan(0, fftSize / 2 + 1).CopyTo(diffSpectrum);
 
-            ArrayPool<int>.Shared.Return(safeIndex);
+            ArrayPoolHolder<int>.Shared.Return(safeIndex);
         }
 
         void FixF0(double[] powerSpectrum, double[] numeratorI, int fftSize, double fs, double currentF0, int numberOfHarmonics, ref double refinedF0, ref double refinedScore)

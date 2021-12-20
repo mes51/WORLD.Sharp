@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
@@ -283,16 +282,16 @@ namespace WORLD.Sharp
 
         public void Release()
         {
-            ArrayPool<double>.Shared.Return(Waveform);
-            ArrayPool<double>.Shared.Return(Input);
-            ArrayPool<Complex>.Shared.Return(Spectrum);
+            ArrayPoolHolder<double>.Shared.Return(Waveform);
+            ArrayPoolHolder<double>.Shared.Return(Input);
+            ArrayPoolHolder<Complex>.Shared.Return(Spectrum);
         }
 
         public static ForwardRealFFT Create(int fftSize)
         {
-            var waveform = ArrayPool<double>.Shared.Rent(fftSize);
-            var input = ArrayPool<double>.Shared.Rent(fftSize);
-            var spectrum = ArrayPool<Complex>.Shared.Rent(fftSize);
+            var waveform = ArrayPoolHolder<double>.Shared.Rent(fftSize);
+            var input = ArrayPoolHolder<double>.Shared.Rent(fftSize);
+            var spectrum = ArrayPoolHolder<Complex>.Shared.Rent(fftSize);
             waveform.AsSpan().Clear();
             input.AsSpan().Clear();
             spectrum.AsSpan().Clear();
@@ -319,16 +318,16 @@ namespace WORLD.Sharp
 
         public void Release()
         {
-            ArrayPool<double>.Shared.Return(Waveform);
-            ArrayPool<double>.Shared.Return(Input);
-            ArrayPool<Complex>.Shared.Return(Spectrum);
+            ArrayPoolHolder<double>.Shared.Return(Waveform);
+            ArrayPoolHolder<double>.Shared.Return(Input);
+            ArrayPoolHolder<Complex>.Shared.Return(Spectrum);
         }
 
         public static InverseRealFFT Create(int fftSize)
         {
-            var waveform = ArrayPool<double>.Shared.Rent(fftSize);
-            var input = ArrayPool<double>.Shared.Rent(fftSize);
-            var spectrum = ArrayPool<Complex>.Shared.Rent(fftSize);
+            var waveform = ArrayPoolHolder<double>.Shared.Rent(fftSize);
+            var input = ArrayPoolHolder<double>.Shared.Rent(fftSize);
+            var spectrum = ArrayPoolHolder<Complex>.Shared.Rent(fftSize);
             waveform.AsSpan().Clear();
             input.AsSpan().Clear();
             spectrum.AsSpan().Clear();
